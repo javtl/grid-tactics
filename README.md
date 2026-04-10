@@ -40,9 +40,9 @@ The project is currently in its early development phase (**MVP Phase**).
 
 ### Installation
 1. Clone the repository:
-   ```bash
-   git clone [https://github.com/YOUR_USERNAME/grid-tactics.git](https://github.com/YOUR_USERNAME/grid-tactics.git)
-``
+```bash
+   git clone https://github.com/javtl/grid-tactics.git
+```
 
 2.  Install dependencies:
     ```bash

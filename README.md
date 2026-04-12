@@ -27,7 +27,7 @@ This project is built with a **decoupled architecture** mindset, a key focus for
 The project is currently in its early development phase (**MVP Phase**).
 
 - [x] **GT-01: Architecture Setup:** Environment configuration and project skeleton.
-- [ ] **GT-02: Data Layer:** Implementing card definitions and resource scaling.
+- [x] **GT-02: Data Layer:** Implementing card definitions and resource scaling.
 - [ ] **GT-03: Logic Layer:** Developing the 4x4 grid merging algorithm.
 
 ---

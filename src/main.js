@@ -1,12 +1,13 @@
 /**
  * main.js
  * Entry point for Grid Tactics.
- * Validation for Grid Logic and Coordinate System.
+ * Logic & UI Coordination.
  */
 import Phaser from 'phaser';
 import { Card } from './core/Card';
 import { Grid } from './core/Grid';
-import { CARD_TYPES, CARD_DATA } from './data/CardDefinitions';
+import { UIManager } from './ui/UIManager';
+import { CARD_TYPES } from './data/CardDefinitions';
 
 const config = {
     type: Phaser.AUTO,
@@ -20,29 +21,21 @@ const config = {
     },
     scene: {
         create: function() {
-            // 1. Initialize Core Grid
+            // 1. Inicializamos los Controladores
             this.grid = new Grid(4);
-            const cellSize = 120;
-            const offset = { x: 300, y: 180 };
+            this.ui = new UIManager(this, this.grid);
 
-            // 2. UI Header
-            this.add.text(512, 50, 'GRID TACTICS: MATRIX TEST', {
+            // 2. Dibujamos el escenario base
+            this.ui.drawGrid();
+
+            // 3. Cabecera (UI Fija)
+            this.add.text(512, 50, 'GRID TACTICS: VISUAL LAYER', {
                 fontSize: '28px',
                 fill: '#4ecdc4',
                 fontFamily: 'monospace'
             }).setOrigin(0.5);
 
-            // 3. Draw Grid Background (Visual Debug)
-            const graphics = this.add.graphics();
-            graphics.lineStyle(2, 0x444466);
-
-            for (let y = 0; y < 4; y++) {
-                for (let x = 0; x < 4; x++) {
-                    graphics.strokeRect(offset.x + x * cellSize, offset.y + y * cellSize, cellSize, cellSize);
-                }
-            }
-
-            // 4. Spawn Logic Function
+            // 4. Lógica de Spawning (Coordinada)
             const spawnCard = () => {
                 const emptyCells = this.grid.getEmptyCells();
                 
@@ -51,37 +44,30 @@ const config = {
                     return;
                 }
 
-                // Pick random type and empty cell
+                // Lógica de datos
                 const types = Object.values(CARD_TYPES);
                 const randomType = types[Math.floor(Math.random() * types.length)];
                 const { x, y } = emptyCells[Math.floor(Math.random() * emptyCells.length)];
 
-                // Logic: Add to Grid
                 const newCard = new Card(randomType);
-                this.grid.addCard(newCard, x, y);
-
-                // Visual: Add to Phaser
-                const cardStats = newCard.getStats();
-                const textX = offset.x + (x * cellSize) + cellSize / 2;
-                const textY = offset.y + (y * cellSize) + cellSize / 2;
-
-                this.add.text(textX, textY, cardStats.displayName[0], { 
-                    fontSize: '40px', 
-                    color: `#${cardStats.color.toString(16)}` 
-                }).setOrigin(0.5);
-
-                console.log(`Spawned ${randomType} at [${x}, ${y}]`);
+                
+                // Si la lógica permite añadirla...
+                if (this.grid.addCard(newCard, x, y)) {
+                    // ...la UI se encarga de representarla
+                    this.ui.renderCard(newCard, x, y);
+                    console.log(`Spawned ${randomType} at [${x}, ${y}]`);
+                }
             };
 
-            // 5. Interaction: Click to spawn
+            // 5. Interacción
             this.input.on('pointerdown', () => spawnCard());
 
-            this.add.text(512, 700, 'Click to spawn a card in a random empty cell', {
+            this.add.text(512, 700, 'Click to spawn a card with animation', {
                 fontSize: '18px',
                 fill: '#aaaaaa'
             }).setOrigin(0.5);
             
-            // Initial spawn
+            // Spawn inicial
             spawnCard();
         }
     }

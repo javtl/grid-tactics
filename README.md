@@ -48,7 +48,7 @@ We have successfully completed the foundational phase of the project, establishi
 ### Installation
 1. Clone the repository:
 ```bash
-git clone [https://github.com/javtl/grid-tactics.git](https://github.com/javtl/grid-tactics.git)
+git clone https://github.com/javtl/grid-tactics.git
 ```
 
 2. Install dependencies:
@@ -77,5 +77,3 @@ This project is licensed under the **MIT License**.
 -----
 *Developed as a professional portfolio project focusing on clean code, performance, and game design patterns.*
 ```
-
-¡Con este `README`, tu repositorio ya tiene una pinta increíble! **Sprint 1: Mission Accomplished.** 👾🏆

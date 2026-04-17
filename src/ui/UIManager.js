@@ -8,12 +8,9 @@ export class UIManager {
         this.grid = grid;
         this.cellSize = 120;
         this.offset = { x: 300, y: 180 };
-        this.cardSprites = new Map(); // Para rastrear qué sprite pertenece a qué Card ID
+        this.cardSprites = new Map(); 
     }
 
-    /**
-     * Dibuja el fondo del tablero (los 16 slots vacíos)
-     */
     drawGrid() {
         const graphics = this.scene.add.graphics();
         graphics.lineStyle(4, 0x444466);
@@ -30,15 +27,11 @@ export class UIManager {
         }
     }
 
-    /**
-     * Renderiza una carta específica en su posición del grid
-     */
     renderCard(card, x, y) {
         const stats = card.getStats();
         const px = this.offset.x + (x * this.cellSize) + this.cellSize / 2;
         const py = this.offset.y + (y * this.cellSize) + this.cellSize / 2;
 
-        // Crear un contenedor para la carta (fondo + texto/icono)
         const container = this.scene.add.container(px, py);
 
         const background = this.scene.add.rectangle(0, 0, 100, 100, stats.color)
@@ -51,8 +44,22 @@ export class UIManager {
         }).setOrigin(0.5);
 
         container.add([background, label]);
+
+        // --- NUEVAS LÍNEAS GT-05 ---
         
-        // Animación de entrada (Pop-up)
+        // 1. Definir el área de impacto (Hit Area)
+        container.setSize(100, 100); 
+
+        // 2. Habilitar el objeto para que sea interactivo y arrastrable
+        container.setInteractive({ draggable: true });
+
+        // 3. Inyectar metadatos lógicos en el objeto visual
+        container.setData('gridX', x);
+        container.setData('gridY', y);
+        container.setData('cardId', card.id);
+
+        // ---------------------------
+        
         container.setScale(0);
         this.scene.tweens.add({
             targets: container,

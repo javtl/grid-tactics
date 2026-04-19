@@ -1,13 +1,10 @@
-/**
- * main.js
- * Entry point for Grid Tactics.
- * Coordinates Logic, UI, and Input Handling.
- */
 import Phaser from 'phaser';
 import { Card } from './core/Card';
 import { Grid } from './core/Grid';
 import { UIManager } from './ui/UIManager';
-import { InputHandler } from './ui/InputHandler'; // [NUEVO] Importamos el gestor de entrada
+import { InputHandler } from './ui/InputHandler';
+import { GameManager } from './core/GameManager'; // [NUEVO]
+import { GAME_STATES } from './data/GameStates';   // [NUEVO]
 import { CARD_TYPES } from './data/CardDefinitions';
 
 const config = {
@@ -22,59 +19,52 @@ const config = {
     },
     scene: {
         create: function() {
-            // 1. Inicializamos los Controladores (Data & View)
+            // --- 1. INICIALIZACIÓN DE CORE (DATA) ---
             this.grid = new Grid(4);
+            
+            // --- 2. INICIALIZACIÓN DE CONTROLADORES ---
+            // IMPORTANTE: Primero el GameManager para que los demás puedan consultarlo
+            this.gameManager = new GameManager();
+            
             this.ui = new UIManager(this, this.grid);
+            
+            // Inyectamos el gameManager en el InputHandler (Inyección de dependencias)
+            this.inputHandler = new InputHandler(this, this.grid, this.ui, this.gameManager);
 
-            // 2. [NUEVO] Inicializamos el Gestor de Input
-            // Le pasamos la escena (this), la lógica (grid) y la vista (ui)
-            this.inputHandler = new InputHandler(this, this.grid, this.ui);
+            // --- 3. CONFIGURACIÓN INICIAL ---
+            // Establecemos el estado inicial: Estamos listos para jugar al puzzle
+            this.gameManager.setGameState(GAME_STATES.PHASE_PUZZLE);
 
-            // 3. Dibujamos el escenario base
+            // --- 4. RENDERIZADO INICIAL ---
             this.ui.drawGrid();
 
-            // Cabecera
-            this.add.text(512, 50, 'GRID TACTICS: INTERACTION LAYER', {
+            this.add.text(512, 50, 'GRID TACTICS: GAME MANAGER MODE', {
                 fontSize: '28px',
                 fill: '#4ecdc4',
                 fontFamily: 'monospace'
             }).setOrigin(0.5);
 
-            // 4. Lógica de Spawning
+            // --- 5. LÓGICA DE SPAWNING ---
             const spawnCard = () => {
                 const emptyCells = this.grid.getEmptyCells();
-                
-                if (emptyCells.length === 0) {
-                    console.warn("Board Full!");
-                    return;
-                }
+                if (emptyCells.length === 0) return;
 
                 const types = Object.values(CARD_TYPES);
                 const randomType = types[Math.floor(Math.random() * types.length)];
                 const { x, y } = emptyCells[Math.floor(Math.random() * emptyCells.length)];
 
                 const newCard = new Card(randomType);
-                
                 if (this.grid.addCard(newCard, x, y)) {
                     this.ui.renderCard(newCard, x, y);
                 }
             };
 
-            // 5. [AJUSTE] Interacción de Spawn
-            // En lugar de capturar cualquier clic en la pantalla, creamos un botón.
-            // Esto evita que al intentar arrastrar una carta, se cree otra accidentalmente.
             const spawnBtn = this.add.text(512, 700, '[ CLICK TO SPAWN CARD ]', {
-                fontSize: '20px',
-                fill: '#ffffff',
-                backgroundColor: '#333355',
-                padding: { x: 20, y: 10 }
-            })
-            .setOrigin(0.5)
-            .setInteractive({ useHandCursor: true });
+                fontSize: '20px', fill: '#ffffff', backgroundColor: '#333355', padding: { x: 20, y: 10 }
+            }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
             spawnBtn.on('pointerdown', () => spawnCard());
             
-            // Spawn iniciales para probar el Drag & Drop
             spawnCard();
             spawnCard();
         }

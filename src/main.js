@@ -1,12 +1,12 @@
-/**
- * main.js
- * Entry point for Grid Tactics.
- * Logic & UI Coordination.
- */
 import Phaser from 'phaser';
 import { Card } from './core/Card';
 import { Grid } from './core/Grid';
+import { Entity } from './core/Entity';           // [NUEVO]
+import { CombatManager } from './core/CombatManager'; // [NUEVO]
 import { UIManager } from './ui/UIManager';
+import { InputHandler } from './ui/InputHandler';
+import { GameManager } from './core/GameManager';
+import { GAME_STATES } from './data/GameStates';
 import { CARD_TYPES } from './data/CardDefinitions';
 
 const config = {
@@ -21,53 +21,74 @@ const config = {
     },
     scene: {
         create: function() {
-            // 1. Inicializamos los Controladores
+            // --- 1. INICIALIZACIÓN DE CORE (DATA & LOGIC) ---
             this.grid = new Grid(4);
-            this.ui = new UIManager(this, this.grid);
+            this.gameManager = new GameManager();
+            
+            // Inicializamos el Motor de Combate [GT-07]
+            this.combatManager = new CombatManager();
 
-            // 2. Dibujamos el escenario base
+            // Seteamos un enemigo de prueba (como un Mock en Java)
+            const goblin = new Entity("Goblin Saqueador", 50, 10, 2);
+            this.combatManager.setEnemy(goblin);
+
+            // --- 2. INICIALIZACIÓN DE CONTROLADORES ---
+            this.ui = new UIManager(this, this.grid);
+            
+            // Mantenemos la inyección de dependencias
+            this.inputHandler = new InputHandler(this, this.grid, this.ui, this.gameManager);
+
+            // --- 3. CONFIGURACIÓN INICIAL ---
+            this.gameManager.setGameState(GAME_STATES.PHASE_PUZZLE);
+
+            // --- 4. RENDERIZADO INICIAL ---
             this.ui.drawGrid();
 
-            // 3. Cabecera (UI Fija)
-            this.add.text(512, 50, 'GRID TACTICS: VISUAL LAYER', {
+            // Título actualizado para reflejar el progreso
+            this.add.text(512, 50, 'GRID TACTICS: COMBAT ENGINE ACTIVE', {
                 fontSize: '28px',
                 fill: '#4ecdc4',
                 fontFamily: 'monospace'
             }).setOrigin(0.5);
 
-            // 4. Lógica de Spawning (Coordinada)
+            // --- 5. LÓGICA DE INTERFAZ DE PRUEBA ---
             const spawnCard = () => {
                 const emptyCells = this.grid.getEmptyCells();
-                
-                if (emptyCells.length === 0) {
-                    console.warn("Board Full!");
-                    return;
-                }
+                if (emptyCells.length === 0) return;
 
-                // Lógica de datos
                 const types = Object.values(CARD_TYPES);
                 const randomType = types[Math.floor(Math.random() * types.length)];
                 const { x, y } = emptyCells[Math.floor(Math.random() * emptyCells.length)];
 
                 const newCard = new Card(randomType);
-                
-                // Si la lógica permite añadirla...
                 if (this.grid.addCard(newCard, x, y)) {
-                    // ...la UI se encarga de representarla
                     this.ui.renderCard(newCard, x, y);
-                    console.log(`Spawned ${randomType} at [${x}, ${y}]`);
                 }
             };
 
-            // 5. Interacción
-            this.input.on('pointerdown', () => spawnCard());
+            // Botón de Spawn
+            const spawnBtn = this.add.text(350, 700, '[ SPAWN CARD ]', {
+                fontSize: '20px', fill: '#ffffff', backgroundColor: '#333355', padding: { x: 20, y: 10 }
+            }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
-            this.add.text(512, 700, 'Click to spawn a card with animation', {
-                fontSize: '18px',
-                fill: '#aaaaaa'
-            }).setOrigin(0.5);
+            spawnBtn.on('pointerdown', () => spawnCard());
+
+            // [NUEVO] Botón de TEST de Combate
+            // Esto nos permite probar el GT-07 sin tener aún la lógica de fusión
+            const fightBtn = this.add.text(674, 700, '[ TEST COMBAT TURN ]', {
+                fontSize: '20px', fill: '#ffffff', backgroundColor: '#882222', padding: { x: 20, y: 10 }
+            }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+            fightBtn.on('pointerdown', () => {
+                const result = this.combatManager.executeTurn();
+                console.log("⚔️ Combate:", result);
+                
+                if (result && !result.enemyAlive) {
+                    console.log("🏆 ¡Enemigo derrotado!");
+                }
+            });
             
-            // Spawn inicial
+            spawnCard();
             spawnCard();
         }
     }

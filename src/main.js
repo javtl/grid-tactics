@@ -1,13 +1,12 @@
-/**
- * main.js
- * Entry point for Grid Tactics.
- * Coordinates Logic, UI, and Input Handling.
- */
 import Phaser from 'phaser';
 import { Card } from './core/Card';
 import { Grid } from './core/Grid';
+import { Entity } from './core/Entity';
+import { CombatManager } from './core/CombatManager';
 import { UIManager } from './ui/UIManager';
-import { InputHandler } from './ui/InputHandler'; // [NUEVO] Importamos el gestor de entrada
+import { InputHandler } from './ui/InputHandler';
+import { GameManager } from './core/GameManager';
+import { GAME_STATES } from './data/GameStates';
 import { CARD_TYPES } from './data/CardDefinitions';
 
 const config = {
@@ -22,59 +21,88 @@ const config = {
     },
     scene: {
         create: function() {
-            // 1. Inicializamos los Controladores (Data & View)
+            // --- 1. INICIALIZACIÓN DE LOGICA Y DATOS ---
             this.grid = new Grid(4);
+            this.gameManager = new GameManager();
+            this.combatManager = new CombatManager();
+
+            // [IMPORTANTE] Inyectamos el combatManager en el gameManager
+            // Esto permite que el InputHandler lo encuentre fácilmente
+            this.gameManager.combatManager = this.combatManager;
+
+            // Configuración del enemigo (Stats para probar el escalado de daño)
+            const goblin = new Entity("Goblin Saqueador", 100, 12, 3);
+            this.combatManager.setEnemy(goblin);
+
+            // --- 2. INICIALIZACIÓN DE INTERFAZ Y CONTROL ---
             this.ui = new UIManager(this, this.grid);
+            this.inputHandler = new InputHandler(this, this.grid, this.ui, this.gameManager);
 
-            // 2. [NUEVO] Inicializamos el Gestor de Input
-            // Le pasamos la escena (this), la lógica (grid) y la vista (ui)
-            this.inputHandler = new InputHandler(this, this.grid, this.ui);
+            // --- 3. CONFIGURACIÓN INICIAL ---
+            this.gameManager.setGameState(GAME_STATES.PHASE_PUZZLE);
 
-            // 3. Dibujamos el escenario base
+            // --- 4. RENDERIZADO ---
             this.ui.drawGrid();
 
-            // Cabecera
-            this.add.text(512, 50, 'GRID TACTICS: INTERACTION LAYER', {
+            this.add.text(512, 50, 'GRID TACTICS: RESOURCE SYNC ACTIVE', {
                 fontSize: '28px',
                 fill: '#4ecdc4',
                 fontFamily: 'monospace'
             }).setOrigin(0.5);
 
-            // 4. Lógica de Spawning
+            // --- 5. SISTEMA DE SPAWNING ---
             const spawnCard = () => {
                 const emptyCells = this.grid.getEmptyCells();
-                
-                if (emptyCells.length === 0) {
-                    console.warn("Board Full!");
-                    return;
-                }
+                if (emptyCells.length === 0) return;
 
                 const types = Object.values(CARD_TYPES);
                 const randomType = types[Math.floor(Math.random() * types.length)];
                 const { x, y } = emptyCells[Math.floor(Math.random() * emptyCells.length)];
 
                 const newCard = new Card(randomType);
-                
                 if (this.grid.addCard(newCard, x, y)) {
                     this.ui.renderCard(newCard, x, y);
                 }
             };
 
-            // 5. [AJUSTE] Interacción de Spawn
-            // En lugar de capturar cualquier clic en la pantalla, creamos un botón.
-            // Esto evita que al intentar arrastrar una carta, se cree otra accidentalmente.
-            const spawnBtn = this.add.text(512, 700, '[ CLICK TO SPAWN CARD ]', {
-                fontSize: '20px',
-                fill: '#ffffff',
-                backgroundColor: '#333355',
-                padding: { x: 20, y: 10 }
-            })
-            .setOrigin(0.5)
-            .setInteractive({ useHandCursor: true });
+            const spawnBtn = this.add.text(350, 700, '[ SPAWN CARD ]', {
+                fontSize: '20px', fill: '#ffffff', backgroundColor: '#333355', padding: { x: 20, y: 10 }
+            }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
             spawnBtn.on('pointerdown', () => spawnCard());
+
+            // --- 6. BOTÓN DE COMBATE (Con Log de Recursos) ---
+            const fightBtn = this.add.text(674, 700, '[ EXECUTE ATTACK ]', {
+                fontSize: '20px', fill: '#ffffff', backgroundColor: '#882222', padding: { x: 20, y: 10 }
+            }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+            fightBtn.on('pointerdown', () => {
+                const result = this.combatManager.executeTurn();
+                
+                if (result) {
+                    console.log(`%c ⚔️ TURNO DE COMBATE ⚔️ `, "background: #222; color: #bada55");
+                    
+                    // Si usamos madera, mostramos cuánto daño extra hubo
+                    if (result.bonusUsed > 0) {
+                        console.log(`%c 🔥 ¡ATAQUE CARGADO! Madera usada: +${result.bonusUsed} ATK`, "color: #ffaa00");
+                    }
+
+                    console.log(`🧠 IA: ${result.enemyActionMsg}`);
+                    console.table({
+                        "Daño Final": result.playerDamageDealt,
+                        "Bono Aplicado": result.bonusUsed,
+                        "HP Enemigo": result.enemyHP,
+                        "HP Héroe": result.playerHP
+                    });
+
+                    if (!result.enemyAlive) {
+                        console.log("🏆 Enemigo derrotado.");
+                        fightBtn.disableInteractive().setAlpha(0.5);
+                    }
+                }
+            });
             
-            // Spawn iniciales para probar el Drag & Drop
+            spawnCard();
             spawnCard();
             spawnCard();
         }

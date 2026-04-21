@@ -21,36 +21,36 @@ const config = {
     },
     scene: {
         create: function() {
-            // --- 1. INICIALIZACIÓN DE CORE (DATA & LOGIC) ---
+            // --- 1. INICIALIZACIÓN DE LOGICA Y DATOS ---
             this.grid = new Grid(4);
             this.gameManager = new GameManager();
-            
-            // Inicializamos el Motor de Combate
             this.combatManager = new CombatManager();
 
-            // Seteamos un enemigo de prueba (Goblin con IA reactiva)
-            const goblin = new Entity("Goblin Saqueador", 60, 12, 2);
+            // [IMPORTANTE] Inyectamos el combatManager en el gameManager
+            // Esto permite que el InputHandler lo encuentre fácilmente
+            this.gameManager.combatManager = this.combatManager;
+
+            // Configuración del enemigo (Stats para probar el escalado de daño)
+            const goblin = new Entity("Goblin Saqueador", 100, 12, 3);
             this.combatManager.setEnemy(goblin);
 
-            // --- 2. INICIALIZACIÓN DE CONTROLADORES ---
+            // --- 2. INICIALIZACIÓN DE INTERFAZ Y CONTROL ---
             this.ui = new UIManager(this, this.grid);
-            
-            // Inyectamos el gameManager para el control de fases
             this.inputHandler = new InputHandler(this, this.grid, this.ui, this.gameManager);
 
             // --- 3. CONFIGURACIÓN INICIAL ---
             this.gameManager.setGameState(GAME_STATES.PHASE_PUZZLE);
 
-            // --- 4. RENDERIZADO INICIAL ---
+            // --- 4. RENDERIZADO ---
             this.ui.drawGrid();
 
-            this.add.text(512, 50, 'GRID TACTICS: ENEMY AI ACTIVE (v1)', {
+            this.add.text(512, 50, 'GRID TACTICS: RESOURCE SYNC ACTIVE', {
                 fontSize: '28px',
                 fill: '#4ecdc4',
                 fontFamily: 'monospace'
             }).setOrigin(0.5);
 
-            // --- 5. LÓGICA DE INTERFAZ Y SPAWNING ---
+            // --- 5. SISTEMA DE SPAWNING ---
             const spawnCard = () => {
                 const emptyCells = this.grid.getEmptyCells();
                 if (emptyCells.length === 0) return;
@@ -65,15 +65,14 @@ const config = {
                 }
             };
 
-            // Botón de Spawn
             const spawnBtn = this.add.text(350, 700, '[ SPAWN CARD ]', {
                 fontSize: '20px', fill: '#ffffff', backgroundColor: '#333355', padding: { x: 20, y: 10 }
             }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
             spawnBtn.on('pointerdown', () => spawnCard());
 
-            // --- 6. BOTÓN DE TEST DE COMBATE (CON IA) ---
-            const fightBtn = this.add.text(674, 700, '[ TEST COMBAT TURN ]', {
+            // --- 6. BOTÓN DE COMBATE (Con Log de Recursos) ---
+            const fightBtn = this.add.text(674, 700, '[ EXECUTE ATTACK ]', {
                 fontSize: '20px', fill: '#ffffff', backgroundColor: '#882222', padding: { x: 20, y: 10 }
             }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
@@ -81,21 +80,29 @@ const config = {
                 const result = this.combatManager.executeTurn();
                 
                 if (result) {
-                    console.log(`%c 🧠 IA: ${result.enemyActionMsg}`, "color: #ffcc00; font-weight: bold;");
+                    console.log(`%c ⚔️ TURNO DE COMBATE ⚔️ `, "background: #222; color: #bada55");
+                    
+                    // Si usamos madera, mostramos cuánto daño extra hubo
+                    if (result.bonusUsed > 0) {
+                        console.log(`%c 🔥 ¡ATAQUE CARGADO! Madera usada: +${result.bonusUsed} ATK`, "color: #ffaa00");
+                    }
+
+                    console.log(`🧠 IA: ${result.enemyActionMsg}`);
                     console.table({
-                        "Daño al Goblin": result.playerDamageDealt,
-                        "Daño al Héroe": result.enemyDamageDealt,
-                        "HP Goblin": result.enemyHP,
+                        "Daño Final": result.playerDamageDealt,
+                        "Bono Aplicado": result.bonusUsed,
+                        "HP Enemigo": result.enemyHP,
                         "HP Héroe": result.playerHP
                     });
 
                     if (!result.enemyAlive) {
-                        console.log("%c 🏆 ¡VICTORIA! El enemigo ha caído.", "color: #00ff00; font-size: 14px;");
+                        console.log("🏆 Enemigo derrotado.");
                         fightBtn.disableInteractive().setAlpha(0.5);
                     }
                 }
             });
             
+            spawnCard();
             spawnCard();
             spawnCard();
         }

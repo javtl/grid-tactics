@@ -14,7 +14,7 @@ const config = {
     width: 1024,
     height: 768,
     parent: 'game-container',
-    backgroundColor: '#0a0a12', // Un poco más oscuro para que resalte el neón
+    backgroundColor: '#0a0a12',
     scale: {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH
@@ -45,17 +45,13 @@ const config = {
                 fontFamily: 'monospace'
             }).setOrigin(0.5).setShadow(0, 0, '#00ffff', 15, true, true);
 
-            // --- 4. [NUEVO GT-10] ELEMENTOS DE UI NEÓN ---
-            
-            // Barras de vida (Jugador y Enemigo)
+            // --- 4. ELEMENTOS DE UI NEÓN ---
             this.playerHB = this.ui.createNeonHealthBar(100, 560, 300, 15, "USER_CORE.EXE", 0x00ffff);
             this.enemyHB = this.ui.createNeonHealthBar(624, 560, 300, 15, "TARGET_VIRUS.SYS", 0xff00ff);
 
-            // Contadores de Recursos Acumulados
             this.atkDisplay = this.ui.createResourceDisplay(100, 610, "⚡ ATK_BUFF", "#00ffff");
             this.defDisplay = this.ui.createResourceDisplay(100, 645, "🛡️ DEF_NET", "#39ff14");
 
-            // Inicializar valores de las barras
             this.playerHB.update(this.combatManager.player.currentHp, this.combatManager.player.maxHp);
             this.enemyHB.update(this.combatManager.enemy.currentHp, this.combatManager.enemy.maxHp);
 
@@ -84,7 +80,7 @@ const config = {
 
             spawnBtn.on('pointerdown', () => spawnCard());
 
-            // --- 6. BOTÓN DE COMBATE (Actualiza UI Neón) ---
+            // --- 6. BOTÓN DE COMBATE (Con Juice GT-11) ---
             const fightBtn = this.add.text(674, 710, '[ EXECUTE_ATTACK ]', {
                 fontSize: '18px', 
                 fontFamily: 'monospace',
@@ -97,35 +93,44 @@ const config = {
                 const result = this.combatManager.executeTurn();
                 
                 if (result) {
-                    // Actualizar Barras de Vida con el resultado
+                    // [GT-11] FEEDBACK VISUAL DE IMPACTO
+                    this.ui.screenShake(0.015, 150); // Vibración de cámara
+                    
+                    // Mostrar daño sobre el enemigo
+                    this.ui.showFloatingText(774, 500, `-${result.playerDamageDealt} HP`, "#ff00ff");
+                    
+                    // Si el enemigo nos golpea, mostrar daño sobre el jugador
+                    if (result.enemyDamageDealt > 0) {
+                        this.scene.time.delayedCall(200, () => {
+                            this.ui.showFloatingText(250, 500, `-${result.enemyDamageDealt} HP`, "#ff5555");
+                        });
+                    }
+
+                    // Actualizar Barras de Vida
                     this.playerHB.update(result.playerHP, this.combatManager.player.maxHp);
                     this.enemyHB.update(result.enemyHP, this.combatManager.enemy.maxHp);
 
-                    // Limpiar displays de recursos visuales tras el consumo
+                    // Resetear displays tras combate
                     this.atkDisplay.update(0);
                     this.defDisplay.update(this.combatManager.player.tempDef);
 
                     if (!result.enemyAlive) {
+                        this.ui.showFloatingText(774, 450, "SYSTEM_DELETED", "#ffffff");
                         fightBtn.disableInteractive().setAlpha(0.5).setText("[ TARGET_DELETED ]");
                     }
                 }
             });
 
-            // --- 7. BUCLE DE ACTUALIZACIÓN DE RECURSOS (Sync Visual) ---
-            // Escuchamos el evento de merge para actualizar los contadores
-            // Nota: En un sistema más avanzado usaríamos un EventEmitter, 
-            // por ahora lo manejamos mediante una pequeña actualización en el update
+            // --- 7. BUCLE DE ACTUALIZACIÓN DE RECURSOS ---
             this.events.on('updateUIResources', () => {
                 this.atkDisplay.update(this.combatManager.pendingAtkBonus);
                 this.defDisplay.update(this.combatManager.player.tempDef);
             });
             
-            // Spawn inicial
             for(let i=0; i<3; i++) spawnCard();
         },
 
         update: function() {
-            // Sincronización continua de recursos (opcional, pero asegura que la UI no mienta)
             if (this.atkDisplay && this.defDisplay) {
                 this.atkDisplay.update(this.combatManager.pendingAtkBonus);
                 this.defDisplay.update(this.combatManager.player.tempDef);

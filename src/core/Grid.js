@@ -8,17 +8,31 @@ export class Grid {
         this.cells = this.createEmptyGrid();
     }
 
-    /**
-     * Initializes a 2D array filled with null.
-     * [ [null, null...], [null, null...] ]
-     */
     createEmptyGrid() {
         return Array(this.size).fill(null).map(() => Array(this.size).fill(null));
     }
 
     /**
-     * Places a card at specific coordinates.
+     * Devuelve la carta en una posición específica.
+     * Vital para que el InputHandler pueda comparar tipos.
      */
+    getCardAt(x, y) {
+        if (this.isWithinBounds(x, y)) {
+            return this.cells[y][x];
+        }
+        return null;
+    }
+
+    /**
+     * Elimina la referencia de una carta en el tablero lógico.
+     * Se usa al fusionar para limpiar la celda de origen.
+     */
+    removeCard(x, y) {
+        if (this.isWithinBounds(x, y)) {
+            this.cells[y][x] = null;
+        }
+    }
+
     addCard(card, x, y) {
         if (this.isWithinBounds(x, y) && !this.cells[y][x]) {
             this.cells[y][x] = card;
@@ -31,9 +45,6 @@ export class Grid {
         return x >= 0 && x < this.size && y >= 0 && y < this.size;
     }
 
-    /**
-     * Returns all empty coordinates as an array of objects [{x, y}, ...]
-     */
     getEmptyCells() {
         const empty = [];
         for (let y = 0; y < this.size; y++) {

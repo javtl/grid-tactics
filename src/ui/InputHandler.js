@@ -1,6 +1,6 @@
 /**
  * InputHandler.js
- * Bridges Grid interaction with Combat resources.
+ * Bridges Grid interaction with Combat resources and triggers VFX.
  */
 import { GAME_STATES } from '../data/GameStates';
 
@@ -72,15 +72,34 @@ export class InputHandler {
             // 1. Lógica de DATOS: Subir nivel
             targetCard.level += 1;
 
-            // 2. Lógica de COMBATE: Sincronizar recursos [NUEVO GT-09]
+            // 2. Lógica de COMBATE: Sincronizar recursos
             this.gameManager.combatManager.addResourcesFromMerge(targetCard.type, targetCard.level);
 
             // 3. Lógica de GRID: Eliminar la carta vieja del sistema de datos
             this.grid.removeCard(originX, originY);
 
+            // [NUEVO GT-11] VFX: Partículas de Glitch al fusionar
+            if (this.ui.createMergeParticles) {
+                this.ui.createMergeParticles(
+                    draggedObject.x, 
+                    draggedObject.y, 
+                    targetCard.getStats().color
+                );
+            }
+
+            // [NUEVO GT-11] VFX: Texto flotante de recurso ganado
+            const bonusLabel = targetCard.type === 'WOOD' ? '⚡ ATK++' : '🛡️ DEF++';
+            const bonusColor = targetCard.type === 'WOOD' ? '#00ffff' : '#39ff14';
+            if (this.ui.showFloatingText) {
+                this.ui.showFloatingText(draggedObject.x, draggedObject.y, bonusLabel, bonusColor);
+            }
+
             // 4. Lógica VISUAL: Destruir el objeto arrastrado y refrescar el destino
             draggedObject.destroy();
-            this.ui.updateCardVisual(tx, ty); // Método sugerido para actualizar texto/color de nivel
+            this.ui.updateCardVisual(tx, ty);
+
+            // Emitir evento para actualizar los contadores neón en main.js
+            this.scene.events.emit('updateUIResources');
 
             return true; 
         }
@@ -99,7 +118,7 @@ export class InputHandler {
             x: px,
             y: py,
             duration: 200,
-            ease: 'Power2'
+            ease: 'Back.easeOut' // Un poco de rebote para más "juice"
         });
     }
 }

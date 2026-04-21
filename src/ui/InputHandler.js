@@ -1,6 +1,6 @@
 /**
  * InputHandler.js
- * Bridges Grid interaction with Combat resources.
+ * Bridges Grid interaction with Combat resources and triggers VFX.
  */
 import { GAME_STATES } from '../data/GameStates';
 
@@ -36,14 +36,11 @@ export class InputHandler {
             gameObject.setAlpha(1);
             gameObject.setScale(1);
 
-            // 1. Obtener coordenadas lógicas del destino
             const targetX = Math.floor((gameObject.x - this.ui.offset.x) / this.ui.cellSize);
             const targetY = Math.floor((gameObject.y - this.ui.offset.y) / this.ui.cellSize);
 
-            // 2. Intentar la lógica de Merge
             const success = this.tryMerge(gameObject, targetX, targetY);
 
-            // 3. Si no hubo merge (o movimiento inválido), vuelve a su sitio
             if (!success) {
                 this.snapBack(gameObject);
             }
@@ -51,36 +48,55 @@ export class InputHandler {
     }
 
     /**
-     * Intenta fusionar la carta arrastrada con una en el destino
+     * Intenta fusionar la carta arrastrada con una en el destino.
+     * [HOTFIX] Implementa lógica Math.max para evitar pérdida de niveles.
      */
     tryMerge(draggedObject, tx, ty) {
-        // A. Validar que el destino esté dentro del tablero
         if (!this.grid.isWithinBounds(tx, ty)) return false;
 
         const originX = draggedObject.getData('gridX');
         const originY = draggedObject.getData('gridY');
 
-        // B. No hacer nada si soltamos en la misma celda de origen
         if (originX === tx && originY === ty) return false;
 
         const targetCard = this.grid.getCardAt(tx, ty);
         const draggedCard = draggedObject.getData('cardInstance');
 
-        // C. Verificar si hay una carta y si son del mismo tipo para el Merge
         if (targetCard && targetCard.type === draggedCard.type) {
             
-            // 1. Lógica de DATOS: Subir nivel
-            targetCard.level += 1;
+            // --- [HOTFIX: MEJORANDO LA LÓGICA DE PROGRESIÓN] ---
+            // Tomamos el nivel más alto de las dos cartas y le sumamos 1.
+            // Esto evita que Nivel 5 + Nivel 1 resulte en Nivel 2.
+            const newLevel = Math.max(targetCard.level, draggedCard.level) + 1;
+            targetCard.level = newLevel;
 
-            // 2. Lógica de COMBATE: Sincronizar recursos [NUEVO GT-09]
+            // Lógica de COMBATE: Sincronizar recursos con el nuevo nivel
             this.gameManager.combatManager.addResourcesFromMerge(targetCard.type, targetCard.level);
 
-            // 3. Lógica de GRID: Eliminar la carta vieja del sistema de datos
+            // Lógica de GRID: Eliminar la carta vieja del sistema de datos
             this.grid.removeCard(originX, originY);
 
-            // 4. Lógica VISUAL: Destruir el objeto arrastrado y refrescar el destino
+            // VFX: Partículas de Glitch
+            if (this.ui.createMergeParticles) {
+                this.ui.createMergeParticles(
+                    draggedObject.x, 
+                    draggedObject.y, 
+                    targetCard.getStats().color
+                );
+            }
+
+            // VFX: Texto flotante (Bonus)
+            const bonusLabel = targetCard.type === 'WOOD' ? '⚡ ATK++' : '🛡️ DEF++';
+            const bonusColor = targetCard.type === 'WOOD' ? '#00ffff' : '#39ff14';
+            if (this.ui.showFloatingText) {
+                this.ui.showFloatingText(draggedObject.x, draggedObject.y, bonusLabel, bonusColor);
+            }
+
+            // Lógica VISUAL: Destruir el objeto arrastrado y refrescar el destino
             draggedObject.destroy();
-            this.ui.updateCardVisual(tx, ty); // Método sugerido para actualizar texto/color de nivel
+            this.ui.updateCardVisual(tx, ty);
+
+            this.scene.events.emit('updateUIResources');
 
             return true; 
         }
@@ -99,7 +115,7 @@ export class InputHandler {
             x: px,
             y: py,
             duration: 200,
-            ease: 'Power2'
+            ease: 'Back.easeOut'
         });
     }
 }

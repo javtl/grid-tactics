@@ -1,40 +1,33 @@
 /**
  * InputHandler.js
- * Manages Drag & Drop events and translates them to Grid actions.
+ * Bridges Grid interaction with Combat resources.
  */
 import { GAME_STATES } from '../data/GameStates';
 
 export class InputHandler {
-    // 1. Añadimos gameManager al constructor
     constructor(scene, grid, ui, gameManager) {
         this.scene = scene;
         this.grid = grid;
         this.ui = ui;
-        this.gameManager = gameManager; // Referencia al orquestador
+        this.gameManager = gameManager; 
         this.setupEvents();
     }
 
     setupEvents() {
         this.scene.input.on('dragstart', (pointer, gameObject) => {
-            // --- FILTRO DE ESTADO ---
-            // Si no estamos en fase puzzle, bloqueamos cualquier interacción
             if (!this.gameManager.isPhase(GAME_STATES.PHASE_PUZZLE)) return;
-
             this.scene.children.bringToTop(gameObject);
             gameObject.setAlpha(0.8);
             gameObject.setScale(1.1); 
         });
 
         this.scene.input.on('drag', (pointer, gameObject, dragX, dragY) => {
-            // También protegemos el arrastre activo
             if (!this.gameManager.isPhase(GAME_STATES.PHASE_PUZZLE)) return;
-
             gameObject.x = dragX;
             gameObject.y = dragY;
         });
 
         this.scene.input.on('dragend', (pointer, gameObject) => {
-            // Protección final al soltar
             if (!this.gameManager.isPhase(GAME_STATES.PHASE_PUZZLE)) {
                 this.snapBack(gameObject);
                 return;
@@ -43,13 +36,56 @@ export class InputHandler {
             gameObject.setAlpha(1);
             gameObject.setScale(1);
 
-            // Corrección de lógica de coordenadas (Uso de cellSize para precisión)
+            // 1. Obtener coordenadas lógicas del destino
             const targetX = Math.floor((gameObject.x - this.ui.offset.x) / this.ui.cellSize);
             const targetY = Math.floor((gameObject.y - this.ui.offset.y) / this.ui.cellSize);
-            
-            // Lógica de retorno por defecto (hasta GT-09)
-            this.snapBack(gameObject);
+
+            // 2. Intentar la lógica de Merge
+            const success = this.tryMerge(gameObject, targetX, targetY);
+
+            // 3. Si no hubo merge (o movimiento inválido), vuelve a su sitio
+            if (!success) {
+                this.snapBack(gameObject);
+            }
         });
+    }
+
+    /**
+     * Intenta fusionar la carta arrastrada con una en el destino
+     */
+    tryMerge(draggedObject, tx, ty) {
+        // A. Validar que el destino esté dentro del tablero
+        if (!this.grid.isWithinBounds(tx, ty)) return false;
+
+        const originX = draggedObject.getData('gridX');
+        const originY = draggedObject.getData('gridY');
+
+        // B. No hacer nada si soltamos en la misma celda de origen
+        if (originX === tx && originY === ty) return false;
+
+        const targetCard = this.grid.getCardAt(tx, ty);
+        const draggedCard = draggedObject.getData('cardInstance');
+
+        // C. Verificar si hay una carta y si son del mismo tipo para el Merge
+        if (targetCard && targetCard.type === draggedCard.type) {
+            
+            // 1. Lógica de DATOS: Subir nivel
+            targetCard.level += 1;
+
+            // 2. Lógica de COMBATE: Sincronizar recursos [NUEVO GT-09]
+            this.gameManager.combatManager.addResourcesFromMerge(targetCard.type, targetCard.level);
+
+            // 3. Lógica de GRID: Eliminar la carta vieja del sistema de datos
+            this.grid.removeCard(originX, originY);
+
+            // 4. Lógica VISUAL: Destruir el objeto arrastrado y refrescar el destino
+            draggedObject.destroy();
+            this.ui.updateCardVisual(tx, ty); // Método sugerido para actualizar texto/color de nivel
+
+            return true; 
+        }
+
+        return false;
     }
 
     snapBack(gameObject) {

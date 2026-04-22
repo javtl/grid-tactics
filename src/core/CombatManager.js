@@ -1,11 +1,10 @@
 import { Entity } from './Entity';
+import { ABILITIES } from '../data/AbilityDefinitions';
 
 export class CombatManager {
     constructor() {
         this.player = new Entity("Hero", 100, 15, 5);
         this.enemy = null;
-        
-        // [NUEVO] Almacén de recursos generados por el Grid
         this.pendingAtkBonus = 0; 
     }
 
@@ -13,63 +12,60 @@ export class CombatManager {
         this.enemy = enemyEntity;
     }
 
-    /**
-     * [NUEVO] Recibe recursos desde el InputHandler/Grid al fusionar cartas
-     * @param {string} type - Tipo de carta (WOOD, STONE)
-     * @param {number} level - Nivel resultante de la fusión
-     */
     addResourcesFromMerge(type, level) {
-        // Multiplicador: a mayor nivel, mayor beneficio (escala lineal x5)
         const bonusValue = level * 5;
-
         if (type === 'WOOD') {
-            // La madera se acumula como daño extra para el próximo executeTurn()
             this.pendingAtkBonus += bonusValue;
-            console.log(`[COMBAT] Madera fusionada: +${bonusValue} ATK acumulado.`);
         } 
         else if (type === 'STONE') {
-            // La piedra genera defensa inmediata que protege contra el próximo golpe enemigo
             this.player.addTempDef(bonusValue);
-            console.log(`[COMBAT] Piedra fusionada: +${bonusValue} DEF aplicada.`);
         }
-    }
-
-    decideEnemyAction() {
-        if (!this.enemy) return null;
-        const healthPercent = this.enemy.getHealthStatus();
-
-        if (healthPercent < 35) {
-            return {
-                type: 'DEFEND',
-                value: 8,
-                message: `${this.enemy.name} se pone en guardia!`
-            };
-        }
-
-        return {
-            type: 'ATTACK',
-            value: this.enemy.atk,
-            message: `${this.enemy.name} lanza un ataque feroz!`
-        };
     }
 
     /**
-     * Resuelve un turno aplicando los bonos acumulados del Grid
+     * [NUEVO GT-012] Ejecuta una habilidad específica.
+     * Reemplaza la lógica de ataque automático por consumo selectivo.
      */
-    executeTurn() {
+    executeAbility(abilityId) {
         if (!this.enemy || !this.player.isAlive()) return null;
 
-        // --- 1. ACCIÓN DEL JUGADOR (Con Bonus de Madera) ---
-        // El daño total es la suma de tu ataque base + todo lo mergeado en el grid
-        const totalPlayerAtk = this.player.atk + this.pendingAtkBonus;
-        const dmgToEnemy = this.enemy.takeDamage(totalPlayerAtk);
-        
-        // [IMPORTANTE] Tras usar el bono de madera, lo reseteamos para el siguiente turno
-        const usedBonus = this.pendingAtkBonus;
-        this.pendingAtkBonus = 0;
+        const ability = ABILITIES[abilityId];
+        if (!ability) return null;
 
-        // --- 2. ACCIÓN DEL ENEMIGO (IA) ---
-        let dmgToPlayer = 0;
+        // 1. VALIDACIÓN DE RECURSOS
+        // Comprobamos si el jugador tiene suficiente ATK acumulado o DEF (tempDef)
+        if (this.pendingAtkBonus < ability.cost.atk || this.player.tempDef < ability.cost.def) {
+            console.log(`[COMBAT] Recursos insuficientes para ${ability.name}`);
+            return { error: "RESOURCES_LOW", message: "ENERGÍA INSUFICIENTE" };
+        }
+
+        // 2. CONSUMO DE RECURSOS
+        this.pendingAtkBonus -= ability.cost.atk;
+        // La defensa se consume si la habilidad tiene un coste de defensa
+        if (ability.cost.def > 0) {
+            this.player.tempDef -= ability.cost.def;
+        }
+
+        let playerDamageDealt = 0;
+        let shieldGained = 0;
+
+        // 3. EJECUCIÓN DEL EFECTO DE LA HABILIDAD
+        switch (ability.type) {
+            case 'DAMAGE':
+                // Daño base + (Poder de habilidad * 5)
+                playerDamageDealt = this.player.atk + (ability.power * 5);
+                this.enemy.takeDamage(playerDamageDealt);
+                break;
+
+            case 'SHIELD':
+                // Aumenta la defensa temporal directamente
+                shieldGained = ability.power;
+                this.player.addTempDef(shieldGained);
+                break;
+        }
+
+        // 4. RESPUESTA DEL ENEMIGO (IA)
+        let enemyDamageDealt = 0;
         let enemyActionReport = "";
 
         if (this.enemy.isAlive()) {
@@ -77,24 +73,38 @@ export class CombatManager {
             enemyActionReport = action.message;
 
             if (action.type === 'ATTACK') {
-                dmgToPlayer = this.player.takeDamage(action.value);
+                enemyDamageDealt = this.player.takeDamage(action.value);
             } 
             else if (action.type === 'DEFEND') {
                 this.enemy.addTempDef(action.value);
             }
         } else {
-            enemyActionReport = `${this.enemy.name} ha sido derrotado!`;
+            enemyActionReport = `${this.enemy.name} ha sido eliminado.`;
         }
 
         return {
-            playerDamageDealt: dmgToEnemy,
-            bonusUsed: usedBonus, // Informamos cuánta madera se quemó en el ataque
-            enemyDamageDealt: dmgToPlayer,
+            abilityUsed: ability.name,
+            playerDamageDealt,
+            enemyDamageDealt,
+            shieldGained,
             enemyActionMsg: enemyActionReport,
             enemyAlive: this.enemy.isAlive(),
             playerAlive: this.player.isAlive(),
             enemyHP: this.enemy.currentHp,
-            playerHP: this.player.currentHp
+            playerHP: this.player.currentHp,
+            pendingAtk: this.pendingAtkBonus,
+            pendingDef: this.player.tempDef
         };
+    }
+
+    decideEnemyAction() {
+        if (!this.enemy) return null;
+        const healthPercent = this.enemy.getHealthStatus();
+
+        if (healthPercent < 35) {
+            return { type: 'DEFEND', value: 8, message: `${this.enemy.name} activa Firewall!` };
+        }
+
+        return { type: 'ATTACK', value: this.enemy.atk, message: `${this.enemy.name} lanza un Virus!` };
     }
 }

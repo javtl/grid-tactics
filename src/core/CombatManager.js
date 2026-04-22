@@ -12,59 +12,69 @@ export class CombatManager {
         this.enemy = enemyEntity;
     }
 
+    /**
+     * FIX: Suma de recursos. 
+     * Si fusionas LVL 4 + LVL 8, el "level" recibido es 12. 
+     * El bonusValue debe ser consistente.
+     */
     addResourcesFromMerge(type, level) {
+        // Multiplicamos por 5 el nivel resultante de la fusión
         const bonusValue = level * 5;
+        
         if (type === 'WOOD') {
             this.pendingAtkBonus += bonusValue;
         } 
         else if (type === 'STONE') {
+            // Aseguramos que la defensa temporal del Entity se sume correctamente
             this.player.addTempDef(bonusValue);
         }
     }
 
     /**
-     * [NUEVO GT-012] Ejecuta una habilidad específica.
-     * Reemplaza la lógica de ataque automático por consumo selectivo.
+     * Ejecuta una habilidad.
+     * Corregido el consumo de recursos para evitar valores negativos.
      */
     executeAbility(abilityId) {
         if (!this.enemy || !this.player.isAlive()) return null;
 
         const ability = ABILITIES[abilityId];
-        if (!ability) return null;
-
-        // 1. VALIDACIÓN DE RECURSOS
-        // Comprobamos si el jugador tiene suficiente ATK acumulado o DEF (tempDef)
-        if (this.pendingAtkBonus < ability.cost.atk || this.player.tempDef < ability.cost.def) {
-            console.log(`[COMBAT] Recursos insuficientes para ${ability.name}`);
-            return { error: "RESOURCES_LOW", message: "ENERGÍA INSUFICIENTE" };
+        if (!ability) {
+            console.error(`Habilidad ${abilityId} no encontrada`);
+            return null;
         }
 
-        // 2. CONSUMO DE RECURSOS
-        this.pendingAtkBonus -= ability.cost.atk;
-        // La defensa se consume si la habilidad tiene un coste de defensa
-        if (ability.cost.def > 0) {
-            this.player.tempDef -= ability.cost.def;
+        // 1. VALIDACIÓN ESTRICTA
+        const atkCost = ability.cost.atk || 0;
+        const defCost = ability.cost.def || 0;
+        const playerDef = this.player.tempDef || 0;
+
+        if (this.pendingAtkBonus < atkCost || playerDef < defCost) {
+            return { error: "RESOURCES_LOW" };
         }
+
+        // 2. CONSUMO (Garantizando que no bajen de 0)
+        this.pendingAtkBonus = Math.max(0, this.pendingAtkBonus - atkCost);
+        this.player.tempDef = Math.max(0, playerDef - defCost);
 
         let playerDamageDealt = 0;
         let shieldGained = 0;
 
-        // 3. EJECUCIÓN DEL EFECTO DE LA HABILIDAD
+        // 3. EFECTO
         switch (ability.type) {
             case 'DAMAGE':
-                // Daño base + (Poder de habilidad * 5)
+                // Daño = Atk Base + (Poder * 5)
                 playerDamageDealt = this.player.atk + (ability.power * 5);
                 this.enemy.takeDamage(playerDamageDealt);
                 break;
 
             case 'SHIELD':
-                // Aumenta la defensa temporal directamente
+            case 'DEFENSE':
                 shieldGained = ability.power;
                 this.player.addTempDef(shieldGained);
                 break;
         }
 
-        // 4. RESPUESTA DEL ENEMIGO (IA)
+        // 4. RESPUESTA ENEMIGA
         let enemyDamageDealt = 0;
         let enemyActionReport = "";
 
@@ -73,13 +83,14 @@ export class CombatManager {
             enemyActionReport = action.message;
 
             if (action.type === 'ATTACK') {
+                // takeDamage devuelve el daño REAL tras mitigar con defensa
                 enemyDamageDealt = this.player.takeDamage(action.value);
             } 
             else if (action.type === 'DEFEND') {
                 this.enemy.addTempDef(action.value);
             }
         } else {
-            enemyActionReport = `${this.enemy.name} ha sido eliminado.`;
+            enemyActionReport = `${this.enemy.name} OFFLINE.`;
         }
 
         return {
@@ -99,12 +110,13 @@ export class CombatManager {
 
     decideEnemyAction() {
         if (!this.enemy) return null;
-        const healthPercent = this.enemy.getHealthStatus();
+        const healthPercent = (this.enemy.currentHp / this.enemy.maxHp) * 100;
 
-        if (healthPercent < 35) {
-            return { type: 'DEFEND', value: 8, message: `${this.enemy.name} activa Firewall!` };
+        // Lógica de "Desesperación": si tiene poca vida, se defiende más
+        if (healthPercent < 30) {
+            return { type: 'DEFEND', value: 15, message: `${this.enemy.name} activa RECOVERY.BAT` };
         }
 
-        return { type: 'ATTACK', value: this.enemy.atk, message: `${this.enemy.name} lanza un Virus!` };
+        return { type: 'ATTACK', value: this.enemy.atk, message: `${this.enemy.name} ejecuta KILL_PROCESS` };
     }
 }

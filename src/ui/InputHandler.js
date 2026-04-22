@@ -39,69 +39,63 @@ export class InputHandler {
             const targetX = Math.floor((gameObject.x - this.ui.offset.x) / this.ui.cellSize);
             const targetY = Math.floor((gameObject.y - this.ui.offset.y) / this.ui.cellSize);
 
-            const success = this.tryMerge(gameObject, targetX, targetY);
+            // Intentamos procesar la acción
+            const actionTaken = this.handleInteraction(gameObject, targetX, targetY);
 
-            if (!success) {
+            if (!actionTaken) {
                 this.snapBack(gameObject);
             }
         });
     }
 
-    /**
-     * Intenta fusionar la carta arrastrada con una en el destino.
-     * [HOTFIX] Implementa lógica Math.max para evitar pérdida de niveles.
-     */
-    tryMerge(draggedObject, tx, ty) {
+    handleInteraction(draggedObject, tx, ty) {
         if (!this.grid.isWithinBounds(tx, ty)) return false;
 
         const originX = draggedObject.getData('gridX');
         const originY = draggedObject.getData('gridY');
+        const draggedCard = draggedObject.getData('cardInstance');
+        const targetCard = this.grid.getCardAt(tx, ty);
 
         if (originX === tx && originY === ty) return false;
 
-        const targetCard = this.grid.getCardAt(tx, ty);
-        const draggedCard = draggedObject.getData('cardInstance');
-
+        // --- LÓGICA DE FUSIÓN (MISMO TIPO) ---
         if (targetCard && targetCard.type === draggedCard.type) {
+            const sumLevel = this.grid.mergeCards(originX, originY, tx, ty);
             
-            // --- [HOTFIX: MEJORANDO LA LÓGICA DE PROGRESIÓN] ---
-            // Tomamos el nivel más alto de las dos cartas y le sumamos 1.
-            // Esto evita que Nivel 5 + Nivel 1 resulte en Nivel 2.
-            const newLevel = Math.max(targetCard.level, draggedCard.level) + 1;
-            targetCard.level = newLevel;
+            // Sincronizar recursos
+            this.gameManager.combatManager.addResourcesFromMerge(targetCard.type, sumLevel);
+            
+            // VFX
+            this.triggerMergeVFX(draggedObject, targetCard);
 
-            // Lógica de COMBATE: Sincronizar recursos con el nuevo nivel
-            this.gameManager.combatManager.addResourcesFromMerge(targetCard.type, targetCard.level);
-
-            // Lógica de GRID: Eliminar la carta vieja del sistema de datos
-            this.grid.removeCard(originX, originY);
-
-            // VFX: Partículas de Glitch
-            if (this.ui.createMergeParticles) {
-                this.ui.createMergeParticles(
-                    draggedObject.x, 
-                    draggedObject.y, 
-                    targetCard.getStats().color
-                );
-            }
-
-            // VFX: Texto flotante (Bonus)
-            const bonusLabel = targetCard.type === 'WOOD' ? '⚡ ATK++' : '🛡️ DEF++';
-            const bonusColor = targetCard.type === 'WOOD' ? '#00ffff' : '#39ff14';
-            if (this.ui.showFloatingText) {
-                this.ui.showFloatingText(draggedObject.x, draggedObject.y, bonusLabel, bonusColor);
-            }
-
-            // Lógica VISUAL: Destruir el objeto arrastrado y refrescar el destino
-            draggedObject.destroy();
-            this.ui.updateCardVisual(tx, ty);
-
+            // IMPORTANTE: En lugar de manipular sprites aquí, 
+            // delegamos el redibujado total a la UI para evitar "fantasmas"
+            this.ui.refreshGridVisuals(); 
+            
             this.scene.events.emit('updateUIResources');
-
-            return true; 
+            return true;
         }
 
-        return false;
+        // --- LÓGICA DE INTERCAMBIO O MOVER (TIPOS DISTINTOS O VACÍO) ---
+        // Si llegamos aquí, o el tipo es distinto o la celda está vacía.
+        // grid.swapCards maneja ambos casos perfectamente.
+        this.grid.swapCards(originX, originY, tx, ty);
+        
+        // Redibujamos todo el tablero según el nuevo estado del Grid
+        this.ui.refreshGridVisuals();
+        
+        return true;
+    }
+
+    triggerMergeVFX(draggedObject, targetCard) {
+        const stats = targetCard.getStats();
+        if (this.ui.createMergeParticles) {
+            this.ui.createMergeParticles(draggedObject.x, draggedObject.y, stats.color);
+        }
+        const bonusLabel = targetCard.type === 'WOOD' ? '⚡ ATK++' : '🛡️ DEF++';
+        if (this.ui.showFloatingText) {
+            this.ui.showFloatingText(draggedObject.x, draggedObject.y, bonusLabel, stats.colorText || "#ffffff");
+        }
     }
 
     snapBack(gameObject) {

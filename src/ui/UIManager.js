@@ -1,6 +1,6 @@
 /**
  * UIManager.js
- * Handles the Cyber-Arcade visual layer, neons, and GT-11 VFX (Juice).
+ * Handles the Cyber-Arcade visual layer, neons, and GT-12 Ability System.
  */
 export class UIManager {
     constructor(scene, grid) {
@@ -15,15 +15,79 @@ export class UIManager {
             pink: 0xff00ff,   
             lime: 0x39ff14,   
             grid: 0x1a1a2e,   
-            neonStroke: 0x4ecdc4
+            neonStroke: 0x4ecdc4,
+            disabled: 0x555555 // Color para botones inactivos
         };
     }
 
     /**
-     * [NUEVO GT-11] Crea una explosión de partículas estilo "Glitch/Pixel"
+     * [NUEVO GT-012] Crea un botón de habilidad interactivo.
+     * @param {number} x, y - Posición
+     * @param {Object} ability - Definición de la habilidad (id, name, cost...)
      */
+    createAbilityButton(x, y, ability) {
+        const btnColor = ability.type === 'DAMAGE' ? '#ff00ff' : '#39ff14';
+        
+        // Contenedor para agrupar texto de nombre y coste
+        const container = this.scene.add.container(x, y);
+
+        const bg = this.scene.add.rectangle(0, 0, 160, 50, 0x111122)
+            .setStrokeStyle(2, ability.type === 'DAMAGE' ? 0xff00ff : 0x39ff14, 0.5);
+
+        const nameText = this.scene.add.text(0, -8, ability.name, {
+            fontSize: '14px',
+            fontFamily: 'monospace',
+            fill: btnColor,
+            fontWeight: 'bold'
+        }).setOrigin(0.5);
+
+        const costLabel = ability.cost.atk > 0 ? `⚡${ability.cost.atk}` : `🛡️${ability.cost.def}`;
+        const costText = this.scene.add.text(0, 12, `COST: ${costLabel}`, {
+            fontSize: '11px',
+            fontFamily: 'monospace',
+            fill: '#cccccc'
+        }).setOrigin(0.5);
+
+        container.add([bg, nameText, costText]);
+        container.setSize(160, 50);
+        container.setInteractive({ useHandCursor: true });
+
+        // Guardamos datos en el objeto para facilitar el refresco posterior
+        container.setData('abilityId', ability.id);
+        container.setData('cost', ability.cost);
+        container.setData('mainColor', btnColor);
+
+        // Feedback visual al pasar el ratón
+        container.on('pointerover', () => bg.setFillStyle(0x222244));
+        container.on('pointerout', () => bg.setFillStyle(0x111122));
+
+        return container;
+    }
+
+    /**
+     * [NUEVO GT-012] Habilita o deshabilita botones según recursos disponibles.
+     */
+    refreshAbilityButtons(buttons, currentAtk, currentDef) {
+        buttons.forEach(btn => {
+            const cost = btn.getData('cost');
+            const bg = btn.list[0];
+            const isAffordable = currentAtk >= cost.atk && currentDef >= cost.def;
+
+            if (isAffordable) {
+                btn.setAlpha(1);
+                btn.setInteractive();
+                bg.setStrokeStyle(2, btn.getData('mainColor').replace('#', '0x'), 1);
+            } else {
+                btn.setAlpha(0.3);
+                btn.disableInteractive();
+                bg.setStrokeStyle(2, 0x555555, 0.5);
+            }
+        });
+    }
+
+    // --- MÉTODOS ANTERIORES (VFX Y GRID) MANTENIDOS ---
+
     createMergeParticles(x, y, color) {
-        // Creamos un gráfico simple para la partícula (un cuadrado de 4x4)
         const pixel = this.scene.add.graphics();
         pixel.fillStyle(color, 1);
         pixel.fillRect(0, 0, 6, 6);
@@ -32,24 +96,16 @@ export class UIManager {
 
         const emitter = this.scene.add.particles(x, y, 'pixel_particle', {
             speed: { min: 100, max: 250 },
-            angle: { min: 0, max: 360 },
             scale: { start: 1, end: 0 },
-            alpha: { start: 1, end: 0 },
             lifespan: 500,
             gravityY: 150,
             blendMode: 'ADD',
             emitting: false
         });
-
-        emitter.explode(20); // Dispara 20 partículas de golpe
-        
-        // Limpieza automática
+        emitter.explode(20);
         this.scene.time.delayedCall(600, () => emitter.destroy());
     }
 
-    /**
-     * [NUEVO GT-11] Texto flotante que sube y desaparece (Damage/Bonus)
-     */
     showFloatingText(x, y, message, colorHex) {
         const text = this.scene.add.text(x, y, message, {
             fontSize: '28px',
@@ -68,9 +124,6 @@ export class UIManager {
         });
     }
 
-    /**
-     * [NUEVO GT-11] Feedback de impacto en el combate
-     */
     screenShake(intensity = 0.02, duration = 200) {
         this.scene.cameras.main.shake(duration, intensity);
     }
@@ -112,11 +165,7 @@ export class UIManager {
                 bar.fillRoundedRect(-2, -2, (width * percentage) + 4, height + 4, 4);
                 bar.fillStyle(color, 1);
                 bar.fillRoundedRect(0, 0, width * percentage, height, 4);
-
-                // [GT-11] Si la barra baja, disparar un pequeño shake local o flash
-                if (percentage < 0.3) {
-                    text.setTint(0xff0000); // Alerta roja si queda poca vida
-                }
+                if (percentage < 0.3) text.setTint(0xff0000);
             }
         };
     }
@@ -134,7 +183,7 @@ export class UIManager {
                 if (val > 0) {
                     this.scene.tweens.add({
                         targets: text,
-                        scale: 1.15, // Un poco más de énfasis en el bounce
+                        scale: 1.15,
                         duration: 80,
                         yoyo: true
                     });
@@ -190,10 +239,9 @@ export class UIManager {
         if (container) {
             const levelText = container.list[2];
             levelText.setText(`LVL ${card.level}`);
-
             this.scene.tweens.add({
                 targets: container,
-                scale: 1.4, // Merge más agresivo
+                scale: 1.4,
                 duration: 100,
                 yoyo: true,
                 ease: 'Cubic.easeInOut'

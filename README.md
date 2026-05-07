@@ -32,9 +32,9 @@ We have successfully completed the second major phase, integrating a functional 
 
 ### 🔜 Upcoming: Sprint 3 - Progression & VFX
 
-  - [ ] **GT-10: Health Bars & UI:** Dynamic visual feedback for combat damage.
-  - [ ] **GT-11: Loot System:** Rewards for defeating enemies.
-  - [ ] **GT-12: VFX & Particles:** Visual juice for merges and impacts.
+  - [x] **GT-10: Health Bars & UI:** Dynamic visual feedback for combat damage.
+  - [x] **GT-11: Loot System:** Rewards for defeating enemies.
+  - [x] **GT-12: VFX & Particles:** Visual juice for merges and impacts.
 
 -----
 

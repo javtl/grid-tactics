@@ -574,26 +574,61 @@ export class UIManager {
 
     /**
      * Crea un botón de habilidad con borde de neón.
+     * Devuelve el `Phaser.GameObjects.Container` con `.on()`, `setEnabled()`, `setText()` y datos de ability.
+     *
      * @param {number} x
      * @param {number} y
-     * @param {string} text      Texto del botón
-     * @param {'atk'|'def'} type Tipo para paleta de color
-     * @param {Function} onClick Callback
-     * @returns {{ setEnabled(bool): void }}
+     * @param {object|string} abilityOrText  Objeto ability (`AbilityDefinitions`) o texto legacy
+     * @param {'atk'|'def'|Function} [fourth]  Paleta legacy `'atk'|'def'` o callback opcional si `abilityOrText` es objeto
+     * @param {Function} [onClick]           Callback legacy cuando el 3er arg es string
+     * @returns {Phaser.GameObjects.Container & { setEnabled(boolean): void, setText(string): Phaser.GameObjects.Container }}
      */
-    createAbilityButton(x, y, text, type, onClick) {
-        const color    = this.colors[type] ?? this.colors.energy;
-        const colorHex = this.hexStr[type]  ?? this.hexStr.energy;
+    createAbilityButton(x, y, abilityOrText, fourth, onClick) {
+        let abilityObj = null;
+        let displayText;
+        let paletteType;
+
+        if (
+            abilityOrText &&
+            typeof abilityOrText === 'object' &&
+            typeof abilityOrText.name === 'string'
+        ) {
+            abilityObj = abilityOrText;
+            displayText = abilityOrText.name;
+            paletteType = abilityOrText.type === 'SHIELD' ? 'def' : 'atk';
+        } else {
+            displayText = String(abilityOrText ?? '');
+            paletteType =
+                fourth === 'atk' || fourth === 'def' ? fourth : 'atk';
+        }
+
+        const color =
+            this.colors[paletteType] ?? this.colors.energy;
+        const colorHex =
+            this.hexStr[paletteType] ?? this.hexStr.energy;
+
+        const onClickCallback =
+            typeof fourth === 'function'
+                ? fourth
+                : typeof onClick === 'function'
+                  ? onClick
+                  : null;
 
         const container = this.scene.add.container(x, y);
         const W = 140, H = 38;
 
         // ── Fondo ─────────────────────────────────────────────
         const bg = this.scene.add.graphics();
-        this._drawButtonBg(bg, color, W, H);
+        // Nota: Asegúrate de que Claude te haya dado estas funciones auxiliares (_drawButtonBg, etc.)
+        if (this._drawButtonBg) {
+            this._drawButtonBg(bg, color, W, H);
+        } else {
+            // Fallback simple por si faltan las funciones de dibujo de Claude
+            bg.lineStyle(2, color).strokeRect(-W/2, -H/2, W, H);
+        }
 
         // ── Texto ─────────────────────────────────────────────
-        const label = this.scene.add.text(0, 0, text, {
+        const label = this.scene.add.text(0, 0, displayText, {
             fontSize:   '12px',
             fontFamily: "'Orbitron', monospace",
             color:      colorHex,
@@ -605,7 +640,7 @@ export class UIManager {
 
         container.add([bg, label]);
         container.setSize(W, H);
-        container.setInteractive();
+        container.setInteractive({ useHandCursor: true });
 
         // ── Hover ─────────────────────────────────────────────
         container.on('pointerover', () => {
@@ -614,8 +649,10 @@ export class UIManager {
                 targets: container, scale: 1.06,
                 duration: 80, ease: 'Cubic.easeOut',
             });
-            bg.clear();
-            this._drawButtonBgHover(bg, color, W, H);
+            if (this._drawButtonBgHover) {
+                bg.clear();
+                this._drawButtonBgHover(bg, color, W, H);
+            }
         });
 
         container.on('pointerout', () => {
@@ -624,8 +661,10 @@ export class UIManager {
                 targets: container, scale: 1,
                 duration: 80, ease: 'Cubic.easeOut',
             });
-            bg.clear();
-            this._drawButtonBg(bg, color, W, H);
+            if (this._drawButtonBg) {
+                bg.clear();
+                this._drawButtonBg(bg, color, W, H);
+            }
         });
 
         // ── Click ──────────────────────────────────────────────
@@ -635,34 +674,67 @@ export class UIManager {
                 targets: container, scale: 0.92,
                 duration: 50, yoyo: true,
             });
-            this.scene.time.delayedCall(60, onClick);
+            if (onClickCallback) {
+                this.scene.time.delayedCall(60, onClickCallback);
+            }
         });
 
         container.setData('enabled', true);
+        if (abilityObj) {
+            container.setData('ability', abilityObj);
+        }
 
-        return {
-            setEnabled: (enabled) => {
-                container.setData('enabled', enabled);
-                if (enabled) {
-                    container.setAlpha(1);
-                    label.setColor(colorHex);
-                    label.setShadow(0, 0, colorHex, 8, true, true);
+        container.setText = (str) => {
+            label.setText(str);
+            return container;
+        };
+
+        container.setEnabled = (enabled) => {
+            container.setData('enabled', enabled);
+            if (enabled) {
+                container.setAlpha(1);
+                label.setColor(colorHex);
+                label.setShadow(0, 0, colorHex, 8, true, true);
+                if (this._drawButtonBg) {
                     bg.clear();
                     this._drawButtonBg(bg, color, W, H);
-                    this.scene.tweens.add({
-                        targets: container,
-                        scale:   { from: 1.08, to: 1 },
-                        duration: 180, ease: 'Back.easeOut',
-                    });
-                } else {
-                    container.setAlpha(0.38);
-                    label.setColor('#445566');
-                    label.setShadow(0, 0, '#000000', 0, false, false);
+                }
+                this.scene.tweens.add({
+                    targets: container,
+                    scale:   { from: 1.08, to: 1 },
+                    duration: 180, ease: 'Back.easeOut',
+                });
+            } else {
+                container.setAlpha(0.38);
+                label.setColor('#445566');
+                label.setShadow(0, 0, '#000000', 0, false, false);
+                if (this._drawButtonBgDisabled) {
                     bg.clear();
                     this._drawButtonBgDisabled(bg, W, H);
                 }
-            },
+            }
         };
+
+        return container;
+    }
+
+    /**
+     * Habilita o deshabilita cada botón según si el jugador puede pagar el coste ATK/DEF.
+     * @param {Array<Phaser.GameObjects.Container>} buttons Botones devueltos por createAbilityButton
+     * @param {number} atk Recurso ATK disponible
+     * @param {number} def Recurso DEF disponible
+     */
+    refreshAbilityButtons(buttons, atk, def) {
+        buttons.forEach((btn) => {
+            const ability = btn.getData('ability');
+            if (!ability) return;
+            const cost = ability.cost ?? { atk: 0, def: 0 };
+            const canAfford =
+                atk >= (cost.atk ?? 0) && def >= (cost.def ?? 0);
+            if (typeof btn.setEnabled === 'function') {
+                btn.setEnabled(canAfford);
+            }
+        });
     }
 
     // ── Helpers internos para dibujar botones ──────────────────

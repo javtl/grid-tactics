@@ -1,4 +1,4 @@
-# 🔮 Grid Tactics (Tácticas de la Cuadrícula)
+# 🔮 Grid Tactics 
 
 [](https://opensource.org/licenses/MIT)
 [](https://phaser.io/)
